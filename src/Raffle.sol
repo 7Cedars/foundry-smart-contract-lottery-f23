@@ -36,6 +36,7 @@ import { VRFConsumerBaseV2 } from "@chainlink/contracts/src/v0.8/VRFConsumerBase
 contract Raffle is VRFConsumerBaseV2 {
   error Raffle__NotEnoughEthSent(); 
   error Raffle__TransferFailed(); 
+  error Raffle__RaffleNotOpen(); 
 
   /** Type declarations */
   enum RaffleState {
@@ -57,9 +58,12 @@ contract Raffle is VRFConsumerBaseV2 {
   address payable[] private s_players; 
   address payable private s_recentWinner; 
   uint256 private s_lastTimeStamp;
+  RaffleState private s_raffleState; 
   
   /** Events */
   event EnteredRaffle(address indexPlayer);  
+  event PickedWinner(address winner);  
+  
 
   constructor(
     uint256 entranceFee, 
@@ -75,6 +79,8 @@ contract Raffle is VRFConsumerBaseV2 {
       i_gasLane = gasLane; 
       i_subscriptionId = subscriptionId; 
       i_callbackGasLimit = callbackGasLimit; 
+
+      s_raffleState = RaffleState.OPEN; 
       s_lastTimeStamp = block.timestamp; 
       
   }
@@ -82,6 +88,9 @@ contract Raffle is VRFConsumerBaseV2 {
   function enterRaffle() external payable { 
     if(msg.value < i_entranceFee) {
       revert Raffle__NotEnoughEthSent(); 
+    }
+    if(s_raffleState != RaffleState.OPEN) {
+      revert Raffle__RaffleNotOpen(); 
     }
     s_players.push(payable(msg.sender));
 
@@ -92,12 +101,13 @@ contract Raffle is VRFConsumerBaseV2 {
     if ((block.timestamp - s_lastTimeStamp) <= i_interval) {
       revert(); 
     }
+    s_raffleState = RaffleState.CALCULATING; 
     uint256 requestId = i_vrfCoordinator.requestRandomWords(
             i_gasLane,
             i_subscriptionId,
             REQUEST_CONFIRMATIONS, 
             i_callbackGasLimit,
-            NUM_WORDS    
+            NUM_WORDS
     );
   }
 
@@ -108,12 +118,16 @@ contract Raffle is VRFConsumerBaseV2 {
     uint256 indexOfWinner = randomWords[0] % s_players.length; 
     address payable winner = s_players[indexOfWinner]; 
     s_recentWinner = winner; 
+    s_raffleState = RaffleState.OPEN; 
+    s_players = new address payable[](0); 
+    s_lastTimeStamp = block.timestamp; 
+
     (bool success, ) = winner.call{value: address(this).balance}(""); 
     if (!success) {
           revert Raffle__TransferFailed(); 
     }
+    emit PickedWinner(winner);
   }
-          
 
   /** Getter Funcions */ 
   function getEntranceFee() external view returns (uint256) {
