@@ -7,6 +7,9 @@ import {Test, console} from "forge-std/Test.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
 
 contract RaffleTest is Test {
+  /* events */
+  event EnteredRaffle(address indexed player); 
+
   Raffle raffle; 
   HelperConfig helperConfig; 
 
@@ -33,11 +36,56 @@ contract RaffleTest is Test {
       subscriptionId, 
       callbackGasLimit
     ) = helperConfig.activeNetworkConfig(); 
+
+    vm.deal(PLAYER, STARTING_USER_BALANCE); 
   }
 
   function testRaffleInitialisesInOpenState() public view {
     assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN); 
   }
 
+  //////////////////////////////
+  // ENTER RAFFLE             //
+  //////////////////////////////
+
+  function testRaffleRevertsWhenYouDontPayEnough() public {
+    // Arrange
+    vm.prank(PLAYER); 
+    // Act / Assert
+    vm.expectRevert(Raffle.Raffle__NotEnoughEthSent.selector); 
+    raffle.enterRaffle();
+  }
+
+  function testRaffleRecordsPlayerWhenTheyEnter() public {
+    // Arrange
+    vm.prank(PLAYER); 
+    raffle.enterRaffle{value: entranceFee}();
+    address playerRecorded = raffle.getPlayer(0);
+    // Act / Assert
+    assert(playerRecorded == PLAYER);
+  }
+
+  function testEmitsEventOnEntrance() public {
+    // Arrange
+    vm.prank(PLAYER); 
+    vm.expectEmit(true, false, false, false, address(raffle)); 
+    emit EnteredRaffle(PLAYER); 
+    // Act / Assert
+    raffle.enterRaffle{value: entranceFee}();
+  } 
+
+  function testCantEnterWhenRaffleIsCalculating() public {
+    // Arrange
+    vm.prank(PLAYER); 
+    raffle.enterRaffle{value: entranceFee}();
+    vm.warp(block.timestamp + interval + 1); // this warps you forward in time :) 
+    vm.roll(block.number + 1); // this lets you mine / go to a new block.. 
+    raffle.performUpkeep(""); 
+    
+    // Act / Assert
+    vm.expectRevert(Raffle.Raffle__RaffleNotOpen.selector); 
+    vm.prank(PLAYER); 
+    raffle.enterRaffle{value: entranceFee}(); 
+  } 
 
 }

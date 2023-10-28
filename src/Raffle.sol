@@ -66,7 +66,7 @@ contract Raffle is VRFConsumerBaseV2 {
   RaffleState private s_raffleState; 
   
   /** Events */
-  event EnteredRaffle(address indexPlayer);  
+  event EnteredRaffle(address indexed player);  
   event PickedWinner(address winner);  
   
 
@@ -169,5 +169,9 @@ contract Raffle is VRFConsumerBaseV2 {
 
   function getRaffleState() external view returns (RaffleState) {
     return s_raffleState; 
+  } 
+
+  function getPlayer(uint256 indexOfPlayer) external view returns (address) {
+    return s_players[indexOfPlayer];
   } 
 }
